@@ -18,6 +18,17 @@ export default function SessionMode() {
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [duration, setDuration] = useState(0);
   const [permissionError, setPermissionError] = useState(false);
+  const [micState, setMicState] = useState<PermissionState | 'unknown'>('unknown');
+
+  // Check initial permission status
+  useEffect(() => {
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' as PermissionName }).then(status => {
+        setMicState(status.state);
+        status.onchange = () => setMicState(status.state);
+      });
+    }
+  }, []);
 
   // Mutations
   const createSession = useCreateSession();
@@ -43,9 +54,14 @@ export default function SessionMode() {
     } else {
       // Start
       try {
+        // First check if the browser actually supports mediaDevices
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Browser does not support microphone access");
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         // Clean up stream immediately, useAudioAnalysis handles its own stream
-        stream.getTracks().forEach(track => track.stop());
+        // stream.getTracks().forEach(track => track.stop()); // REMOVED: Keep stream active for useAudioAnalysis
         
         const session = await createSession.mutateAsync({
           mode,
@@ -56,7 +72,7 @@ export default function SessionMode() {
         setIsRecording(true);
         setPermissionError(false);
       } catch (err) {
-        console.error(err);
+        console.error("Microphone permission error:", err);
         setPermissionError(true);
       }
     }
@@ -133,13 +149,19 @@ export default function SessionMode() {
 
       {/* Main Visualizer Area */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 z-10">
-        {permissionError ? (
+        {(permissionError || micState === 'denied') ? (
           <div className="text-center max-w-xs mx-auto p-6 bg-destructive/10 border border-destructive/20 rounded-2xl">
             <Mic className="w-8 h-8 mx-auto text-destructive mb-3" />
             <h3 className="font-bold text-destructive mb-2">Microphone Access Denied</h3>
             <p className="text-sm text-destructive-foreground">
               Please allow microphone access in your browser settings to use the Live Coach.
             </p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="mt-4 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium"
+            >
+              Retry After Enabling
+            </button>
           </div>
         ) : (
           <PitchVisualizer 
