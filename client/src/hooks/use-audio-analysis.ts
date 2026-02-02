@@ -26,9 +26,9 @@ export function useAudioAnalysis(isListening: boolean) {
 
   const startListening = useCallback(async () => {
     try {
-      // Use a more direct check for getUserMedia
-      const constraints = { audio: true };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("Hook: Requesting microphone access...");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("Hook: Microphone access granted");
       
       const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) {
@@ -39,7 +39,9 @@ export function useAudioAnalysis(isListening: boolean) {
 
       // IMPORTANT: Resume AudioContext (Chrome/Safari requirement)
       if (audioContext.state === 'suspended') {
+        console.log("Resuming AudioContext...");
         await audioContext.resume();
+        console.log("AudioContext resumed");
       }
       const analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(stream);

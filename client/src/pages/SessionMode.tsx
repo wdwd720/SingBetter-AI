@@ -54,7 +54,11 @@ export default function SessionMode() {
     } else {
       // Start
       try {
+        console.log("Requesting microphone access...");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log("Microphone access granted:", stream.id);
+        
+        // Don't stop the tracks here, let the hook handle it
         
         const session = await createSession.mutateAsync({
           mode,
@@ -65,7 +69,7 @@ export default function SessionMode() {
         setIsRecording(true);
         setPermissionError(false);
       } catch (err) {
-        console.error("Microphone permission error:", err);
+        console.error("Microphone permission error details:", err);
         setPermissionError(true);
       }
     }
