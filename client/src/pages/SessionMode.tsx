@@ -54,14 +54,7 @@ export default function SessionMode() {
     } else {
       // Start
       try {
-        // First check if the browser actually supports mediaDevices
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error("Browser does not support microphone access");
-        }
-
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Clean up stream immediately, useAudioAnalysis handles its own stream
-        // stream.getTracks().forEach(track => track.stop()); // REMOVED: Keep stream active for useAudioAnalysis
         
         const session = await createSession.mutateAsync({
           mode,

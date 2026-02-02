@@ -26,11 +26,9 @@ export function useAudioAnalysis(isListening: boolean) {
 
   const startListening = useCallback(async () => {
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Microphone access not supported");
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Use a more direct check for getUserMedia
+      const constraints = { audio: true };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) {
