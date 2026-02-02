@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  sessions, sessionMetrics, sessionEvents, audioArtifacts,
+  singingSessions, sessionMetrics, sessionEvents, audioArtifacts,
   type Session, type InsertSession, 
   type SessionMetrics, type InsertSessionMetrics,
   type SessionEvent, type InsertSessionEvent,
@@ -40,13 +40,13 @@ export class DatabaseStorage implements IStorage {
   upsertUser = authStorage.upsertUser;
 
   async createSession(session: InsertSession): Promise<Session> {
-    const [newSession] = await db.insert(sessions).values(session).returning();
+    const [newSession] = await db.insert(singingSessions).values(session).returning();
     return newSession;
   }
 
   async getSession(id: number): Promise<SessionWithMetrics | undefined> {
-    const session = await db.query.sessions.findFirst({
-      where: eq(sessions.id, id),
+    const session = await db.query.singingSessions.findFirst({
+      where: eq(singingSessions.id, id),
       with: {
         metrics: true,
         events: true,
@@ -56,11 +56,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserSessions(userId: string, limit = 20, offset = 0): Promise<SessionWithMetrics[]> {
-    return await db.query.sessions.findMany({
-      where: eq(sessions.userId, userId),
+    return await db.query.singingSessions.findMany({
+      where: eq(singingSessions.userId, userId),
       limit,
       offset,
-      orderBy: desc(sessions.startedAt),
+      orderBy: desc(singingSessions.startedAt),
       with: {
         metrics: true,
       }
@@ -69,9 +69,9 @@ export class DatabaseStorage implements IStorage {
 
   async updateSession(id: number, updates: Partial<Session>): Promise<Session> {
     const [updated] = await db
-      .update(sessions)
+      .update(singingSessions)
       .set(updates)
-      .where(eq(sessions.id, id))
+      .where(eq(singingSessions.id, id))
       .returning();
     return updated;
   }
@@ -96,15 +96,15 @@ export class DatabaseStorage implements IStorage {
     // we might want to maintain a separate 'user_stats' table.
     
     const userSessions = await db.select({
-      id: sessions.id,
-      duration: sessions.durationSec,
-      startedAt: sessions.startedAt,
+      id: singingSessions.id,
+      duration: singingSessions.durationSec,
+      startedAt: singingSessions.startedAt,
       score: sessionMetrics.overallScore,
     })
-    .from(sessions)
-    .leftJoin(sessionMetrics, eq(sessions.id, sessionMetrics.sessionId))
-    .where(eq(sessions.userId, userId))
-    .orderBy(desc(sessions.startedAt));
+    .from(singingSessions)
+    .leftJoin(sessionMetrics, eq(singingSessions.id, sessionMetrics.sessionId))
+    .where(eq(singingSessions.userId, userId))
+    .orderBy(desc(singingSessions.startedAt));
 
     const totalSessions = userSessions.length;
     const totalDuration = userSessions.reduce((acc, s) => acc + (s.duration || 0), 0);

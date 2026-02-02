@@ -6,8 +6,8 @@ import { users } from "./models/auth";
 
 export * from "./models/auth";
 
-// === SESSIONS ===
-export const sessions = pgTable("sessions", {
+// === SINGING SESSIONS ===
+export const singingSessions = pgTable("singing_sessions", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(), // Linked to auth.users.id
   mode: text("mode").notNull(), // 'live_coach', 'scales', 'song_practice', 'sustained_note'
@@ -18,20 +18,20 @@ export const sessions = pgTable("sessions", {
   durationSec: integer("duration_sec").default(0),
 });
 
-export const sessionsRelations = relations(sessions, ({ one, many }) => ({
+export const singingSessionsRelations = relations(singingSessions, ({ one, many }) => ({
   user: one(users, {
-    fields: [sessions.userId],
+    fields: [singingSessions.userId],
     references: [users.id],
   }),
   metrics: one(sessionMetrics, {
-    fields: [sessions.id],
+    fields: [singingSessions.id],
     references: [sessionMetrics.sessionId],
   }),
   events: many(sessionEvents),
   artifacts: many(audioArtifacts),
 }));
 
-export const insertSessionSchema = createInsertSchema(sessions).omit({ 
+export const insertSessionSchema = createInsertSchema(singingSessions).omit({ 
   id: true, 
   startedAt: true, 
   endedAt: true,
@@ -54,9 +54,9 @@ export const sessionMetrics = pgTable("session_metrics", {
 });
 
 export const sessionMetricsRelations = relations(sessionMetrics, ({ one }) => ({
-  session: one(sessions, {
+  session: one(singingSessions, {
     fields: [sessionMetrics.sessionId],
-    references: [sessions.id],
+    references: [singingSessions.id],
   }),
 }));
 
@@ -73,9 +73,9 @@ export const sessionEvents = pgTable("session_events", {
 });
 
 export const sessionEventsRelations = relations(sessionEvents, ({ one }) => ({
-  session: one(sessions, {
+  session: one(singingSessions, {
     fields: [sessionEvents.sessionId],
-    references: [sessions.id],
+    references: [singingSessions.id],
   }),
 }));
 
@@ -93,9 +93,9 @@ export const audioArtifacts = pgTable("audio_artifacts", {
 });
 
 export const audioArtifactsRelations = relations(audioArtifacts, ({ one }) => ({
-  session: one(sessions, {
+  session: one(singingSessions, {
     fields: [audioArtifacts.sessionId],
-    references: [sessions.id],
+    references: [singingSessions.id],
   }),
 }));
 
@@ -103,7 +103,7 @@ export const insertAudioArtifactSchema = createInsertSchema(audioArtifacts).omit
 
 // === EXPLICIT API TYPES ===
 
-export type Session = typeof sessions.$inferSelect;
+export type Session = typeof singingSessions.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 
 export type SessionMetrics = typeof sessionMetrics.$inferSelect;

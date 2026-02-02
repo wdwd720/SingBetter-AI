@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { insertSessionSchema, insertSessionMetricsSchema, insertSessionEventSchema, sessions, sessionMetrics, sessionEvents } from './schema';
+import { insertSessionSchema, insertSessionMetricsSchema, insertSessionEventSchema, singingSessions, sessionMetrics, sessionEvents } from './schema';
 
 export const errorSchemas = {
   validation: z.object({
@@ -24,7 +24,7 @@ export const api = {
       path: '/api/sessions',
       input: insertSessionSchema,
       responses: {
-        201: z.custom<typeof sessions.$inferSelect>(),
+        201: z.custom<typeof singingSessions.$inferSelect>(),
         400: errorSchemas.validation,
         401: errorSchemas.unauthorized,
       },
@@ -37,7 +37,7 @@ export const api = {
         offset: z.coerce.number().optional(),
       }).optional(),
       responses: {
-        200: z.array(z.custom<typeof sessions.$inferSelect & { metrics?: typeof sessionMetrics.$inferSelect }>()),
+        200: z.array(z.custom<typeof singingSessions.$inferSelect & { metrics?: typeof sessionMetrics.$inferSelect }>()),
         401: errorSchemas.unauthorized,
       },
     },
@@ -45,7 +45,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/sessions/:id',
       responses: {
-        200: z.custom<typeof sessions.$inferSelect & { metrics?: typeof sessionMetrics.$inferSelect; events?: typeof sessionEvents.$inferSelect[] }>(),
+        200: z.custom<typeof singingSessions.$inferSelect & { metrics?: typeof sessionMetrics.$inferSelect; events?: typeof sessionEvents.$inferSelect[] }>(),
         404: errorSchemas.notFound,
         401: errorSchemas.unauthorized,
       },
@@ -59,7 +59,7 @@ export const api = {
         events: z.array(insertSessionEventSchema.omit({ sessionId: true })).optional(),
       }),
       responses: {
-        200: z.custom<typeof sessions.$inferSelect>(),
+        200: z.custom<typeof singingSessions.$inferSelect>(),
         404: errorSchemas.notFound,
         401: errorSchemas.unauthorized,
       },
