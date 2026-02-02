@@ -1,0 +1,389 @@
+You are a top-tier product engineer + mobile UI designer + audio DSP engineer. Build a production-grade MOBILE APP (not a web toy) called “SingBetter AI” that looks and feels like a real premium consumer app (think modern music/fitness apps), NOT like an AI-generated template. The app must be smooth, coherent, and visually consistent.
+
+CORE PRODUCT PROMISE
+SingBetter AI is a personal singing coach that gives instant, friendly, actionable feedback while the user sings—plus structured drills and progress tracking that makes improvement obvious over weeks.
+
+PLATFORM + TECH (MOBILE, NOT WEB)
+Build as a real mobile app:
+Option A (Preferred): React Native + Expo (TypeScript), using native audio APIs.
+- Audio capture: expo-av (recording) + react-native-audio-record or an Expo-compatible approach. If Expo limits real-time analysis, use “record with near-real-time feedback” (fast chunking) plus full analysis on stop.
+- Charts: react-native-svg + victory-native (or a lightweight chart lib).
+- Navigation: @react-navigation/native (native stack + bottom tabs).
+- State: Zustand or Redux Toolkit (Zustand preferred).
+- Backend: Node/Express OR serverless functions (keep simple). For Replit-like environment, Node/Express with REST endpoints.
+- Auth: Email/password (JWT) OR Firebase Auth (if available in builder).
+- DB: SQLite locally (for offline-first) + sync to backend, OR backend SQLite if easiest. Must work offline for practice sessions and sync later.
+
+If the builder cannot do RN, generate a Flutter app instead (Dart). Choose whichever yields a truly native feel.
+
+IMPORTANT: Build MOBILE-FIRST. Every screen must be designed for phones (iPhone + Android). Must support portrait mode perfectly. Tablet layout can be a later bonus.
+
+DESIGN GOALS (NON-NEGOTIABLE)
+The UI must look premium and modern:
+- Consistent spacing, typography, icon style, and color system.
+- No default template look. No random mismatched components.
+- Smooth animations (subtle) and microinteractions.
+- Clear hierarchy: big primary actions, minimal clutter, strong readability.
+- A cohesive visual identity: dark theme by default, with optional light theme.
+- MUST include a design system: spacing scale, typography scale, colors, radii, shadows, component rules.
+
+VISUAL DESIGN SYSTEM SPEC (IMPLEMENT EXACTLY)
+1) Theme
+- Default theme: Deep charcoal background with slightly lighter surfaces.
+- Accent color: a vibrant “electric” highlight used sparingly (buttons, active states).
+- Secondary accent: a softer contrasting color for informational charts.
+- Danger/warn/success: consistent semantic colors.
+- Provide Light Theme too, but default to Dark.
+
+2) Typography (use a clean modern font)
+- Use system font with well-defined sizes and weights:
+  - Display: 28–32, bold (screen titles)
+  - H1: 22–24, semibold
+  - Body: 16–17, regular
+  - Caption: 12–13, medium
+- Always set line height properly and enforce consistent margins.
+
+3) Spacing + Layout
+- Use an 8pt grid.
+- Standard paddings: 16 (small), 20 (default), 24 (large).
+- Cards: 14–18 radius, subtle shadow or border depending on theme.
+- No cramped screens: whitespace is part of the “premium” feel.
+
+4) Components (must be custom-styled)
+- Primary Button: pill or large radius, full-width, thick height, strong press state.
+- Secondary Button: outline / soft surface.
+- Icon Buttons: circular, ripple/opacity feedback.
+- Cards: surfaces with subtle gradient or border.
+- Bottom Tabs: large icons, clear active state, no tiny labels.
+- Modals/Bottom Sheets: used for settings and quick actions.
+- Toasts/Banners: friendly error messaging, never raw stack traces.
+
+5) Animations
+- Use small motion:
+  - button press scale 0.98
+  - screen transitions (native stack)
+  - loading shimmer skeletons
+  - subtle graph transitions
+- Keep motion snappy and not distracting.
+
+BRANDING
+- App icon placeholder and splash screen.
+- App name + tagline on onboarding.
+- Add a “brand voice” style: friendly, supportive, never harsh.
+
+INFORMATION ARCHITECTURE (MOBILE APP NAVIGATION)
+Use Bottom Tab Navigation with 4 tabs:
+1) Home
+2) Practice
+3) Progress
+4) Profile
+
+Additionally:
+- A floating “Start” action on Home (big CTA).
+- Use native stack navigation inside each tab.
+
+ONBOARDING FLOW (MUST BE BEAUTIFUL)
+First launch:
+Screen 1: Welcome
+- Big title: “SingBetter AI”
+- Subtitle: “Real-time feedback. Real improvement.”
+- 3 feature bullets with icons (Pitch, Rhythm, Stability)
+- Primary CTA: “Get Started”
+Screen 2: Quick Setup
+- Ask: experience level (Beginner/Intermediate/Advanced)
+- Ask: goals (Pitch / Rhythm / Control / Confidence)
+- Ask: voice range (optional quick test later)
+Screen 3: Microphone Permission (with education)
+- Explain why mic is needed.
+- Button “Enable Microphone”
+- If denied: show a step-by-step guide.
+Screen 4: Optional: “Try Demo Mode”
+- “No mic? Watch a demo session with sample audio.”
+
+HOME TAB (DASHBOARD) — VISUAL SPEC
+Top section: Greeting + streak
+- “Good afternoon, Md”
+- Streak indicator (🔥 4-day streak)
+- Small “Weekly goal” progress ring (e.g., 3/5 sessions)
+
+Main CTA Card (hero)
+- Big card with gradient surface
+- Title: “Start a Session”
+- Subtitle: “Get instant feedback while you sing.”
+- Primary button: “Start”
+- Secondary: “Quick Warm-up (2 min)”
+
+Quick Stats Row (3 mini cards)
+- Pitch: “Best 82”
+- Rhythm: “Best 76”
+- Stability: “Best 80”
+Each mini card has tiny sparkline.
+
+Recent Sessions List
+- Each row: mode icon + date + score + small colored badge (e.g., “Pitch focus”)
+- Tap opens Session Detail.
+
+PRACTICE TAB (THIS IS THE HEART)
+A segmented control at top:
+- “Live Coach”
+- “Drills”
+- “Song Practice”
+
+LIVE COACH — REAL-TIME SESSION SCREEN (HIGHLY POLISHED)
+This is the most important screen. It must look incredible.
+
+Layout:
+A) Top bar:
+- Left: back
+- Center: session timer
+- Right: settings (gear)
+
+B) Main “Pitch Dial” module (centerpiece)
+- Large circular pitch dial:
+  - Current note name (e.g., “A4”) big
+  - Cents offset displayed clearly (“+18 cents sharp”)
+  - Needle/indicator that moves smoothly
+  - Color logic:
+    - green when within ±10 cents
+    - yellow within ±25
+    - red beyond ±25
+- Under the dial: “Target” area
+  - If drill: shows target note (e.g., “Target: G4”)
+  - If free sing: shows “Target: —”
+
+C) Secondary metrics row (3 chips)
+- Volume meter (live bar)
+- Stability (steady vs shaky)
+- Breath/noise (clean vs airy)
+Each chip is a rounded card with icon + label + live value.
+
+D) Live Graph (bottom half)
+- Pitch timeline chart:
+  - last 10–15 seconds window
+  - smooth line
+  - shows target line when applicable
+- Markers appear where problems happen (small dots).
+
+E) Coach Tips panel
+- A collapsible bottom sheet card:
+  - Title: “Coach Tip”
+  - 1–2 lines max, updates every few seconds:
+    Examples:
+    - “You’re a bit sharp—relax your jaw and lower the pitch slightly.”
+    - “Try steadier airflow—your pitch is wobbling.”
+    - “Great! You’re centered on the note.”
+
+F) Session Controls (bottom sticky)
+- Large center button (Start/Pause)
+- Stop button
+- “Tag moment” button (adds a marker)
+- Haptic feedback on key events
+
+RECORD & ANALYZE MODE (FALLBACK) — MUST FEEL PREMIUM
+- Full-screen recorder with waveform.
+- Big record button with animated ring.
+- 3-second countdown with haptics.
+- Live waveform + timer.
+- After stop: “Analyzing…” with loading skeleton + rotating tips.
+
+DRILLS SECTION — BEAUTIFUL CARDS + MINI PREVIEWS
+Drill cards:
+1) Warm-up (2 min)
+2) Scales Trainer
+3) Sustained Note Trainer
+4) Pitch Accuracy Challenge
+5) Rhythm Clap/Syllable Drill (optional)
+Each card includes:
+- title, duration, difficulty
+- what it improves
+- small preview graphic (mini dial or mini bars)
+- “Start” button
+
+SONG PRACTICE (MOBILE-FRIENDLY)
+- Allow user to import a reference track OR choose built-in samples.
+- Clean upload/import UI.
+- Show waveform + section markers.
+- Record user singing along.
+- Results show “Best section / Worst section” with taps to jump.
+
+PROGRESS TAB — MUST LOOK LIKE A REAL APP
+Top:
+- Weekly summary card:
+  - “This week: +6 pitch points”
+  - Practice minutes
+  - Streak
+Charts:
+- Pitch score over time
+- Rhythm score over time
+- Stability score over time
+- Use interactive tooltips (tap a point to see session detail)
+Insights:
+- “Most improved: Stability”
+- “Common issue: drifting sharp at higher notes”
+Recommendations:
+- “Do Sustained Notes 3x this week”
+
+PROFILE TAB
+- User info
+- Theme toggle
+- Sensitivity settings
+- Latency mode selector
+- Manage downloads / storage
+- Help & FAQ
+- Contact support (opens mail)
+
+SETTINGS (MUST INCLUDE)
+Audio settings:
+- Input sensitivity
+- Noise gate toggle (basic)
+- Guide tone volume
+- Metronome volume
+- Latency mode (Low latency vs High accuracy)
+Display settings:
+- Dark/light toggle
+- Reduce motion toggle
+Account:
+- sign out, delete account (if feasible)
+
+AUDIO ANALYSIS REQUIREMENTS (MUST IMPLEMENT)
+Primary metrics:
+1) Pitch detection (YIN/MPM or autocorrelation):
+- Frame size 2048–4096, hop 256–512
+- Convert f0 to note + cents
+- Smooth with median/EMA
+- Gate low-energy frames
+
+2) Pitch accuracy:
+- average absolute cents error relative to nearest note or target note
+- show “in tune %” (percent of frames within ±10 cents)
+
+3) Stability:
+- cents variance during sustained segments
+- drift (trend) in cents over time
+
+4) Rhythm:
+- For drills: compare note-change timing to metronome beats
+- For song practice: approximate onset alignment
+
+5) Breath/noise:
+- estimate noise using spectral flatness or HF energy ratio
+- flag breathy segments carefully (friendly messaging)
+
+REAL-TIME STRATEGY (IMPORTANT)
+If true streaming analysis is hard:
+- Use chunked recording: analyze every 250–500ms chunk on-device
+- Update UI 10–20 times/sec maximum
+- Ensure it feels “live” even if slightly delayed.
+- Full detailed analysis happens on stop.
+
+SCORING SYSTEM (EXPLICIT FORMULAS)
+Pitch score:
+- Let E = avg_abs_cents_error (cap at 50)
+- score_pitch = clamp(100 - (E * 2), 0, 100)
+- bonus for “in tune %” and quick lock-on time
+
+Stability score:
+- var = stddev(cents over sustained frames)
+- drift = abs(linear_trend_slope)
+- score_stability = clamp(100 - (var*3 + drift*2), 0, 100)
+
+Rhythm score:
+- offset_ms = avg abs onset offset (cap 250ms)
+- score_rhythm = clamp(100 - (offset_ms/2.5), 0, 100)
+
+Breath score:
+- noise_ratio (0–1) higher is worse
+- score_breath = clamp(100 - noise_ratio*120, 0, 100)
+
+Overall:
+- weighted by goal:
+  - Pitch focus: pitch 50, stability 25, rhythm 15, breath 10
+  - Rhythm focus: rhythm 50, pitch 25, stability 15, breath 10
+  - Overall: pitch 35, stability 25, rhythm 25, breath 15
+
+SESSION RESULTS (MOBILE UI SPEC)
+Results Screen must have:
+- Big overall score circle + label (“Solid”, “Great”, “Excellent”)
+- 4 metric cards with scores and one-line meaning
+- A “Highlights” section:
+  - “Best moment” (timestamp)
+  - “Needs work” (timestamp)
+- Timeline player:
+  - waveform + markers
+  - tap marker → show what happened + how to fix
+- “Next steps” plan with 3 drill buttons
+
+DATA + STORAGE (OFFLINE-FIRST)
+Local storage:
+- Save sessions locally first (SQLite or secure storage + files).
+- Store audio recordings in app storage with size limits.
+Sync:
+- When online, sync session metadata and optionally audio.
+- If audio upload is heavy, upload only summary metrics by default.
+User can opt-in to upload audio.
+
+DATABASE MODELS (LOGICAL)
+User:
+- id, email, createdAt
+Session:
+- id, userId, mode, goal, difficulty, createdAt, durationSec
+SessionMetrics:
+- sessionId, overallScore, pitchScore, rhythmScore, stabilityScore, breathScore,
+  avgCentsOff, inTunePercent, driftCents, stabilityStd
+SessionEvents:
+- sessionId, timeMs, type, severity, detailsJSON
+AudioArtifact:
+- sessionId, localPath, remoteUrl(optional), lengthSec, mimeType
+
+BACKEND API (IF USED)
+Auth:
+- POST /auth/signup
+- POST /auth/login
+Sessions:
+- GET /sessions
+- POST /sessions
+- GET /sessions/:id
+- POST /sessions/:id/upload-audio (optional)
+Progress:
+- GET /progress/summary
+- GET /progress/timeseries
+
+MUST INCLUDE robust validation + error messages.
+
+SECURITY
+- Password hashing (bcrypt).
+- JWT token storage securely.
+- File upload validation.
+- Rate limit auth endpoints.
+- Ensure users can access only their own sessions.
+
+QUALITY CHECKLIST (MUST SATISFY)
+- No inconsistent fonts, spacing, colors.
+- No placeholder “AI style” copy. Use natural, friendly voice.
+- Every screen has loading, empty, and error states designed.
+- Smooth navigation and performance.
+- Works without internet (practice + save locally).
+
+IMPLEMENTATION MILESTONES (BUILD IN ORDER)
+1) Design system + navigation + onboarding + theme toggle
+2) Auth + local session storage
+3) Record audio + playback + waveform UI
+4) Pitch detection + pitch dial UI (the core)
+5) Chunked “live” feedback mode
+6) Results + markers + suggestions
+7) Drills: scales + sustained note
+8) Song practice import + alignment
+9) Progress charts + insights
+10) Polish: animations, haptics, accessibility, help screens
+
+DELIVERABLE REQUIREMENTS
+- Output the FULL WORKING MOBILE APP CODE (not a description).
+- Provide the complete file tree.
+- Provide run instructions (one command to start).
+- Provide .env.example for backend if needed.
+- Include sample reference audio in assets and a Demo Mode usable without mic permission.
+- Make sure the UI is visually cohesive and premium.
+
+NOW BUILD IT.
+Generate the full project code with all files, dependencies, and instructions.
+Make sure the default look is a premium dark theme with beautiful spacing and typography.

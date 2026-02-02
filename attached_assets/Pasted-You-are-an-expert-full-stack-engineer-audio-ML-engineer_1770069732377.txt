@@ -1,0 +1,291 @@
+You are an expert full-stack engineer + audio ML engineer. Build a production-ready web app called “SingBetter AI” that gives users real-time singing feedback and guided practice sessions.
+
+PRIMARY GOAL
+Create a polished, fast, and reliable singing coach app that:
+1) Records or streams microphone audio,
+2) Analyzes pitch, timing/rhythm, stability/vibrato, breath/noise, and loudness,
+3) Shows easy-to-understand feedback in real time,
+4) Saves sessions and progress,
+5) Supports “practice modes” (scales, sustained notes, song practice with reference track),
+6) Works smoothly on desktop + mobile browsers.
+
+NON-NEGOTIABLE PRODUCT REQUIREMENTS
+- Must be usable by a beginner immediately (big buttons, simple language).
+- Must have real-time feedback (near live) when microphone mode is enabled.
+- Must support “record then analyze” mode as a fallback if real-time is not supported.
+- Must store sessions and show improvement over time (progress charts and best scores).
+- Must be stable: no crashes, clear error messages, graceful fallbacks.
+- Must include basic authentication (email/password).
+- Must include a clean UI with a modern dark theme (but allow theme toggle).
+- Must use a clear folder structure, readable code, and environment variables for secrets.
+- Must include local development instructions and a simple deployment path.
+
+TECH STACK (choose a practical stack that works well on Replit)
+Frontend:
+- React + Vite (TypeScript preferred) OR Next.js (TypeScript).
+- Web Audio API for mic input, with AudioWorklet if possible.
+- Charts: lightweight chart library (Recharts or similar).
+Backend:
+- Node.js (Express) OR Next.js API routes.
+- If Node/Express: use WebSocket (ws) for real-time streaming events.
+Data:
+- SQLite for Replit simplicity (via Prisma or better-sqlite3).
+- Use Prisma if possible for clean models and migrations.
+Audio Analysis Approach:
+- For real-time pitch detection: use a proven algorithm like YIN / autocorrelation / McLeod Pitch Method.
+- For offline analysis: analyze recorded audio on server or client reliably.
+- Do NOT rely on paid external APIs for core audio features (avoid quota issues). Everything should work locally in-app.
+
+HIGH-LEVEL USER EXPERIENCE
+Landing Page:
+- Value prop: “Sing better with instant feedback.”
+- CTA buttons: “Start Practice” and “Sign In”
+- Short demo section with screenshots (placeholders).
+
+Auth:
+- Sign up / Sign in / sign out.
+- Simple password rules and validation.
+- Protect dashboard routes.
+
+Main Dashboard:
+- Big “Start Session” button.
+- Quick stats: last session score, weekly streak, best pitch accuracy.
+- Session history list (click to view details).
+- Progress charts (pitch accuracy over time, rhythm score, stability score).
+
+Start Session Flow (must be super clear):
+Step 1: Choose Mode
+- “Mic Live Coach (Real-Time)”
+- “Record & Analyze”
+- “Scales Trainer”
+- “Sustained Note Trainer”
+- “Song Practice (Reference Track)”
+Step 2: Choose Goal
+- “Pitch Accuracy”
+- “Rhythm”
+- “Stability”
+- “Breath Control”
+- “Overall”
+Step 3: Choose Difficulty
+- Beginner / Intermediate / Advanced
+Step 4: Permission check and device check
+- If mic permission denied, show how to enable.
+- If real-time fails, auto-suggest “Record & Analyze.”
+
+Live Coach Screen (Real-Time)
+Layout:
+- Top bar: session timer, mode, settings icon.
+- Main panel: 
+  - Pitch meter (note name + cents off)
+  - “Target note” indicator when doing exercises
+  - Volume meter
+  - “Stability” bar (how steady the pitch is)
+- Secondary panel:
+  - Real-time timeline graph (pitch vs time)
+  - Rhythm grid when applicable
+- Bottom:
+  - Start/Pause/Stop
+  - “Mark Mistake” button (lets user tag moments)
+  - “Tips” card that updates (“You’re sharp by ~20 cents — relax jaw and lower pitch”)
+
+Record & Analyze Screen
+- Big record button with countdown (3…2…1)
+- Show waveform while recording
+- On stop: analyzing animation then results page.
+
+Results Screen (for any session)
+Show:
+- Overall score (0–100) with explanation.
+- Breakdown:
+  - Pitch Accuracy (0–100)
+  - Rhythm/Timing (0–100)
+  - Stability/Vibrato Control (0–100)
+  - Breath/Noise Control (0–100)
+- Highlight “Top 3 improvements”
+- “What you did well”
+- A playback player with annotated timeline:
+  - Visual markers where pitch drifted, where timing was off, where instability spiked.
+- Save session automatically.
+- “Practice plan” generated based on weaknesses:
+  - 3 short drills (2–5 minutes each)
+  - each drill has a button “Start this drill”
+
+EXERCISE MODES (DETAILED BEHAVIOR)
+1) Scales Trainer
+- Let user pick:
+  - scale type (major, minor, pentatonic)
+  - starting note
+  - tempo (BPM)
+- Play a guide tone for each note (simple synth tone) and show target note.
+- User sings each note; app measures:
+  - how close they are to target note (cents)
+  - how quickly they “lock in” (attack time)
+  - stability while holding note
+- Give per-note feedback and an overall pass/fail.
+
+2) Sustained Note Trainer
+- User picks a note range (or app suggests based on voice type).
+- App plays target note (guide tone) and asks user to hold for N seconds.
+- Score: stability, drift, vibrato consistency.
+- Give tip: posture/breath.
+
+3) Song Practice (Reference Track)
+- User uploads an audio file (mp3/wav) OR chooses a provided sample track.
+- App shows waveform of reference.
+- App provides:
+  - metronome toggle
+  - optional guide vocal removal not required (keep simple)
+- User records themselves singing along.
+- Analysis:
+  - compare rhythm alignment using onset detection/energy peaks (approximate is ok)
+  - pitch contour comparison: match general melody (don’t require perfect)
+- Show “sections” with best/worst.
+
+DATA MODELS (DATABASE)
+User:
+- id, email, passwordHash, createdAt
+Session:
+- id, userId, mode, goal, difficulty, startedAt, endedAt, durationSec
+SessionMetrics:
+- sessionId
+- overallScore
+- pitchScore
+- rhythmScore
+- stabilityScore
+- breathScore
+- avgCentsOff
+- noteLockTimeAvgMs
+- driftAvgCents
+- noiseFloorAvg
+SessionEvents (for timeline markers):
+- id, sessionId, timeMs, type (PITCH_OFF, RHYTHM_OFF, INSTABILITY, BREATH_NOISE), severity (1–5), details JSON
+AudioArtifact:
+- id, sessionId, type (USER_RECORDING, REFERENCE_TRACK)
+- storagePath (local file or base64/blob strategy)
+- mimeType, createdAt
+
+IMPORTANT: Keep storage simple on Replit:
+- Store audio files in a server folder (e.g., /uploads) with unique names.
+- Store metadata paths in DB.
+- Add limits: max 20MB upload, max 5 minutes record by default.
+
+AUDIO PROCESSING DETAILS (MUST IMPLEMENT)
+Client audio capture:
+- Use Web Audio API to capture mic.
+- Downsample to a workable rate (e.g., 16k or 22.05k) for analysis.
+- Provide an AudioWorklet-based pipeline if supported; fallback to ScriptProcessorNode if needed.
+
+Pitch detection:
+- Implement YIN or MPM:
+  - For each frame (e.g., 2048 samples, hop 256–512),
+  - estimate fundamental frequency (f0),
+  - convert to note name and cents offset vs nearest note.
+- Filter:
+  - ignore frames where energy is too low (silence)
+  - smooth f0 with median filter to reduce jitter
+
+Rhythm/timing:
+- For scales trainer: compare sung note changes to expected time windows (metronome).
+- For song practice: approximate alignment via energy onset detection; compute timing offset.
+
+Stability:
+- measure short-term variance of cents offset during sustained segments
+- detect wobble and uncontrolled vibrato (too irregular) vs controlled vibrato (consistent rate)
+
+Breath/noise:
+- estimate noise floor from high-frequency energy + unvoiced frames
+- flag “breathy” or “noisy” segments, but keep messaging friendly
+
+SCORING (EXPLICIT)
+Define clear scoring formulas:
+- Pitch Score:
+  - base on avg absolute cents error (cap at 50 cents)
+  - reward quick lock-in and sustained closeness
+- Rhythm Score:
+  - base on alignment error (ms) vs expected beats
+- Stability Score:
+  - base on variance of cents during sustain + drift
+- Breath Score:
+  - base on ratio of voiced frames to noisy/unvoiced in segments where user should be singing
+Overall:
+- weighted average depending on chosen goal mode
+
+UI/UX REQUIREMENTS (VERY IMPORTANT)
+- UI must feel premium and “music app” quality.
+- Use:
+  - big typography, spaced layout
+  - clear icons
+  - minimal clutter
+- Provide:
+  - Settings panel (latency mode, sensitivity, metronome volume, guide tone volume)
+  - Accessibility: keyboard accessible, color contrast ok
+- Provide “Help” tooltips:
+  - explain “cents”, “pitch”, “stability” in simple language.
+
+PERFORMANCE REQUIREMENTS
+- Real-time mode must run smoothly without freezing.
+- Use efficient processing; throttle UI updates (e.g., 20–30 fps).
+- WebSocket only if needed; otherwise client-only real-time analysis is ok.
+- Avoid heavy dependencies.
+
+ERROR HANDLING
+- If mic permissions denied: show a step-by-step fix guide.
+- If unsupported browser features: detect and fallback.
+- If analysis fails: store raw audio and allow retry.
+- Provide user-friendly error banners (no cryptic console-only errors).
+
+SECURITY REQUIREMENTS
+- Hash passwords properly (bcrypt).
+- Validate uploads (mime type + size).
+- Protect routes and session ownership.
+- Use environment variables for secrets.
+
+PROJECT STRUCTURE (MUST OUTPUT CLEAN FILE TREE)
+Example:
+singbetter-ai/
+  frontend/ (if separated)
+  backend/ (if separated)
+Or single Next.js app with:
+  app/
+  components/
+  lib/
+  prisma/
+  uploads/
+  README.md
+  .env.example
+
+FEATURE COMPLETION PLAN (MUST FOLLOW)
+Implement in milestones so the app runs early:
+Milestone 1: Basic UI + auth + dashboard skeleton
+Milestone 2: Mic capture + record & playback
+Milestone 3: Pitch detection + pitch meter UI
+Milestone 4: Session saving + results screen
+Milestone 5: Scales trainer
+Milestone 6: Song practice upload + analysis
+Milestone 7: Progress charts + streaks
+Milestone 8: Polish + settings + error handling + deployment notes
+
+TESTING
+- Add basic unit tests for pitch detection functions.
+- Add simple integration checks for API endpoints.
+- Add a “debug” page that shows raw f0 values and frame stats.
+
+DOCUMENTATION (REQUIRED)
+Write a strong README with:
+- What the app does
+- How to run locally
+- How to set env vars
+- How to deploy on Replit
+- Common troubleshooting (mic permissions, mobile Safari quirks)
+
+FINAL OUTPUT REQUIREMENT
+Generate the full working app code (all files), not just a description.
+The app must boot successfully with one command and open a usable UI.
+Include sample audio file(s) in /sample_data and a “Try Demo” mode so the app is testable without singing.
+
+IMPORTANT IMPLEMENTATION NOTE
+If real-time analysis is too heavy server-side, do it client-side:
+- Send only summary metrics to backend for saving.
+- Keep recorded audio upload optional to reduce storage usage.
+
+Now build the entire app accordingly with correct dependencies, full code, and clear run instructions.
