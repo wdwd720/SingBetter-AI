@@ -58,7 +58,9 @@ export default function SessionMode() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log("Microphone access granted:", stream.id);
         
-        // Don't stop the tracks here, let the hook handle it
+        // IMPORTANT: We MUST NOT stop the tracks here if we want useAudioAnalysis to use them.
+        // Actually, getUserMedia creates a NEW stream. If we don't use this exact stream,
+        // we might get permission issues or blocked state.
         
         const session = await createSession.mutateAsync({
           mode,

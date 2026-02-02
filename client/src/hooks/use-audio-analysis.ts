@@ -27,7 +27,23 @@ export function useAudioAnalysis(isListening: boolean) {
   const startListening = useCallback(async () => {
     try {
       console.log("Hook: Requesting microphone access...");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Add more specific constraints
+      const constraints = { 
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        } 
+      };
+      
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (e) {
+        console.warn("Retrying with simple constraints...");
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      
       console.log("Hook: Microphone access granted");
       
       const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
