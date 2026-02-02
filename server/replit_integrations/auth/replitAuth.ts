@@ -26,6 +26,12 @@ export function getSession() {
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions",
+    schemaName: "public",
+    columnNames: {
+      session_id: "sid",
+      session_data: "sess",
+      expire: "expire"
+    }
   });
   return session({
     secret: process.env.SESSION_SECRET!,
