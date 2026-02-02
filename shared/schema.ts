@@ -33,6 +33,7 @@ export const singingSessionsRelations = relations(singingSessions, ({ one, many 
 
 export const insertSessionSchema = createInsertSchema(singingSessions).omit({ 
   id: true, 
+  userId: true,
   startedAt: true, 
   endedAt: true,
   durationSec: true 

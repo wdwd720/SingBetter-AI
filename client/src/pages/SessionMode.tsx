@@ -67,12 +67,23 @@ export default function SessionMode() {
           goal: "pitch",
           difficulty: "beginner"
         });
+        console.log("Session created successfully:", session.id);
         setSessionId(session.id);
         setIsRecording(true);
         setPermissionError(false);
-      } catch (err) {
-        console.error("Microphone permission error details:", err);
-        setPermissionError(true);
+      } catch (err: any) {
+        console.error("Microphone or Session error details:", err);
+        // Better error differentiation
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || (err.message && err.message.includes('permission'))) {
+          setPermissionError(true);
+        } else {
+          // This might be a session creation error
+          toast({
+            title: "Error",
+            description: "Failed to start session. Please try again.",
+            variant: "destructive"
+          });
+        }
       }
     }
   };
