@@ -9,6 +9,7 @@ const APP_HOST = "127.0.0.1";
 const APP_PORT = 5510;
 const SERVER_READY_TIMEOUT_MS = 20000;
 const UPDATE_CHECK_DELAY_MS = 5000;
+const STARTUP_LOG_RELATIVE_PATH = path.join("logs", "startup.log");
 let updaterInitialized = false;
 
 const logDesktop = (message) => {
@@ -17,6 +18,24 @@ const logDesktop = (message) => {
 
 const ensureDir = (targetPath) => {
   fs.mkdirSync(targetPath, { recursive: true });
+};
+
+const appendStartupLog = (userDataDir, message, error) => {
+  try {
+    const logsDir = path.join(userDataDir, "logs");
+    ensureDir(logsDir);
+    const startupLogPath = path.join(logsDir, "startup.log");
+    const errorSuffix = error
+      ? ` | error=${error instanceof Error ? error.stack || error.message : String(error)}`
+      : "";
+    fs.appendFileSync(
+      startupLogPath,
+      `[${new Date().toISOString()}] ${message}${errorSuffix}\n`,
+      "utf8",
+    );
+  } catch (_err) {
+    // Never fail desktop startup because logging failed.
+  }
 };
 
 const resolveFileDatabasePath = (databaseUrl) => {
@@ -32,10 +51,12 @@ const resolveFileDatabasePath = (databaseUrl) => {
   return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
 };
 
-const migrateDatabaseToUserData = (destinationPath, candidatePaths) => {
-  try {
-    if (fs.existsSync(destinationPath)) return;
+const resolveDatabaseSource = (destinationPath, candidatePaths) => {
+  if (fs.existsSync(destinationPath)) {
+    return { source: "existing", migratedFrom: null };
+  }
 
+  try {
     const uniqueCandidates = [...new Set(candidatePaths.filter(Boolean))].filter(
       (candidate) => candidate !== destinationPath,
     );
@@ -43,14 +64,15 @@ const migrateDatabaseToUserData = (destinationPath, candidatePaths) => {
     for (const sourcePath of uniqueCandidates) {
       if (!fs.existsSync(sourcePath)) continue;
       fs.copyFileSync(sourcePath, destinationPath);
-      logDesktop(`Migrated DB to userData: ${destinationPath}`);
-      logDesktop(`Migration source: ${sourcePath}`);
-      return;
+      return { source: "migrated", migratedFrom: sourcePath };
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logDesktop(`DB migration skipped due to error: ${message}`);
+  } catch (_error) {
+    // Fall through to fresh DB path creation.
   }
+
+  // Ensure file path exists for first-time startup. Server schema init will populate tables.
+  fs.closeSync(fs.openSync(destinationPath, "w"));
+  return { source: "fresh", migratedFrom: null };
 };
 
 const loadOrCreateSessionSecret = (secretPath) => {
@@ -206,6 +228,7 @@ const configureDesktopEnvironment = () => {
   const dbPath = path.join(dataDir, "singbetter.db");
   const legacyDesktopDbPath = path.join(dataDir, "desktop.db");
   const secretPath = path.join(dataDir, "session.secret");
+  const startupLogPath = path.join(dataDir, STARTUP_LOG_RELATIVE_PATH);
 
   ensureDir(dataDir);
   ensureDir(uploadsDir);
@@ -214,12 +237,27 @@ const configureDesktopEnvironment = () => {
   const legacyProjectDbPath = path.resolve(process.cwd(), "dev.db");
   const legacyProdDbPath = path.resolve(process.cwd(), "prod-local.db");
 
-  migrateDatabaseToUserData(dbPath, [
-    envDatabasePath,
-    legacyProjectDbPath,
-    legacyProdDbPath,
-    legacyDesktopDbPath,
-  ]);
+  let dbSource = "fresh";
+  let migratedFrom = null;
+  try {
+    const resolved = resolveDatabaseSource(dbPath, [
+      envDatabasePath,
+      legacyProjectDbPath,
+      legacyProdDbPath,
+      legacyDesktopDbPath,
+    ]);
+    dbSource = resolved.source;
+    migratedFrom = resolved.migratedFrom;
+  } catch (error) {
+    appendStartupLog(dataDir, "DB source resolution failed; continuing with fresh DB path", error);
+    try {
+      if (!fs.existsSync(dbPath)) {
+        fs.closeSync(fs.openSync(dbPath, "w"));
+      }
+    } catch (fileError) {
+      appendStartupLog(dataDir, "Failed to create fresh DB placeholder file", fileError);
+    }
+  }
 
   process.env.NODE_ENV = "production";
   process.env.DESKTOP_APP = "1";
@@ -235,7 +273,14 @@ const configureDesktopEnvironment = () => {
   }
   process.env.UPLOADS_DIR = uploadsDir;
   process.env.SESSION_SECRET = loadOrCreateSessionSecret(secretPath);
+  process.env.STARTUP_LOG_PATH = startupLogPath;
 
+  if (migratedFrom) {
+    logDesktop(`DB resolved at: ${dbPath} (source: migrated)`);
+    logDesktop(`DB migration source: ${migratedFrom}`);
+  } else {
+    logDesktop(`DB resolved at: ${dbPath} (source: ${dbSource})`);
+  }
   logDesktop(
     `Runtime paths desktopApp=${process.env.DESKTOP_APP} userData=${dataDir} db=${dbPath} uploads=${uploadsDir}`,
   );

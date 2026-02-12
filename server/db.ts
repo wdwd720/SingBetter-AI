@@ -9,6 +9,21 @@ import initSqlJs from "sql.js";
 import * as schema from "@shared/schema";
 
 const { Pool } = pg;
+const startupLogPath = process.env.STARTUP_LOG_PATH;
+
+const logStartupIssue = (message: string, error?: unknown) => {
+  const formattedError = error instanceof Error ? error.stack || error.message : String(error ?? "");
+  const line = `[${new Date().toISOString()}] ${message}${formattedError ? ` | ${formattedError}` : ""}\n`;
+  console.error(message, error ?? "");
+
+  if (!startupLogPath) return;
+  try {
+    fs.mkdirSync(path.dirname(startupLogPath), { recursive: true });
+    fs.appendFileSync(startupLogPath, line, "utf8");
+  } catch {
+    // Never crash startup if logging fails.
+  }
+};
 
 const databaseUrl = process.env.DATABASE_URL;
 const isDev =
@@ -45,11 +60,25 @@ if (isSqlite && databaseUrl) {
   const require = createRequire(import.meta.url);
   const wasmPath = require.resolve("sql.js/dist/sql-wasm.wasm");
   const SQL = await initSqlJs({ locateFile: () => wasmPath });
-  const existingData =
-    sqliteDbFilePath && fs.existsSync(sqliteDbFilePath)
-      ? fs.readFileSync(sqliteDbFilePath)
-      : undefined;
-  sqliteDb = existingData ? new SQL.Database(existingData) : new SQL.Database();
+  let existingData: Buffer | undefined;
+  if (sqliteDbFilePath && fs.existsSync(sqliteDbFilePath)) {
+    try {
+      const data = fs.readFileSync(sqliteDbFilePath);
+      if (data.length > 0) {
+        existingData = data;
+      }
+    } catch (error) {
+      logStartupIssue("Failed to read existing SQLite file; starting fresh in memory", error);
+    }
+  }
+
+  try {
+    sqliteDb = existingData ? new SQL.Database(existingData) : new SQL.Database();
+  } catch (error) {
+    logStartupIssue("Failed to open SQLite file; creating fresh database in memory", error);
+    sqliteDb = new SQL.Database();
+  }
+
   sqliteDb.exec("PRAGMA foreign_keys = ON;");
 
   // Initialize schema for local SQLite dev if tables are missing.
@@ -339,9 +368,13 @@ if (isSqlite && sqliteDbFilePath) {
   let saved = false;
   const persist = () => {
     if (saved) return;
-    saved = true;
-    const data = sqliteDb!.export();
-    fs.writeFileSync(sqliteDbFilePath!, Buffer.from(data));
+    try {
+      const data = sqliteDb!.export();
+      fs.writeFileSync(sqliteDbFilePath!, Buffer.from(data));
+      saved = true;
+    } catch (error) {
+      logStartupIssue("Failed to persist SQLite database to disk", error);
+    }
   };
 
   process.on("exit", persist);
