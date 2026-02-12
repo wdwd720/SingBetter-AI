@@ -196,7 +196,8 @@
       {
         "provider": "github",
         "owner": "wdwd720",
-        "repo": "SingBetter-AI"
+        "repo": "SingBetter-AI",
+        "releaseType": "release"
       }
     ],
     "artifactName": "${productName} Setup ${version}.${ext}"

@@ -401,7 +401,23 @@ const configureDesktopEnvironment = () => {
   }
 };
 
-const getServerEntryPath = () => path.resolve(__dirname, "..", "dist", "index.js");
+const getServerEntryPath = () => {
+  const candidates = app.isPackaged
+    ? [
+        path.join(process.resourcesPath, "app.asar", "dist", "index.js"),
+        path.join(process.resourcesPath, "dist", "index.js"),
+        path.resolve(__dirname, "..", "dist", "index.js"),
+      ]
+    : [path.resolve(__dirname, "..", "dist", "index.js")];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0];
+};
 
 const startEmbeddedServer = async () => {
   const serverEntry = getServerEntryPath();

@@ -2,6 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
@@ -44,6 +45,8 @@ import { createRateLimiter } from "./middleware/security";
 const assemblyClient = appConfig.transcription.enabled && process.env.ASSEMBLYAI_API_KEY
   ? new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY })
   : null;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const resolveAppVersion = (): string => {
   try {
