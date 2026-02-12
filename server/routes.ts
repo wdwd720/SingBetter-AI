@@ -1,5 +1,7 @@
 import type { Express } from "express";
 import type { Server } from "http";
+import fs from "node:fs";
+import path from "node:path";
 import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { api } from "@shared/routes";
@@ -43,10 +45,24 @@ const assemblyClient = appConfig.transcription.enabled && process.env.ASSEMBLYAI
   ? new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY })
   : null;
 
+const resolveAppVersion = (): string => {
+  try {
+    const packageJsonPath = path.resolve(process.cwd(), "package.json");
+    const raw = fs.readFileSync(packageJsonPath, "utf8");
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    return typeof parsed.version === "string" && parsed.version.trim().length > 0
+      ? parsed.version.trim()
+      : "unknown";
+  } catch {
+    return "unknown";
+  }
+};
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const appVersion = resolveAppVersion();
   const uploadRateLimiter = createRateLimiter(
     appConfig.rateLimit.expensiveMaxRequests,
   );
@@ -409,6 +425,10 @@ export async function registerRoutes(
       req.url = req.url.replace("/api/v1/", "/api/");
     }
     next();
+  });
+
+  app.get("/api/version", (_req, res) => {
+    res.json({ version: appVersion });
   });
 
   // 1. Setup Auth

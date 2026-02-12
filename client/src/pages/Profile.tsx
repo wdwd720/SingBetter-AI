@@ -33,6 +33,10 @@ type Notification = {
   createdAt: string;
 };
 
+type VersionResponse = {
+  version: string;
+};
+
 export default function Profile() {
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
@@ -80,6 +84,25 @@ export default function Profile() {
       });
       if (!response.ok) throw new Error("Failed to load MFA status");
       return response.json();
+    },
+  });
+
+  const versionQuery = useQuery<VersionResponse>({
+    queryKey: ["/api/version"],
+    queryFn: async () => {
+      try {
+        const response = await fetch("/api/version", { credentials: "include" });
+        if (!response.ok) return { version: "unknown" };
+        const data = (await response.json()) as VersionResponse;
+        return {
+          version:
+            typeof data?.version === "string" && data.version.trim().length > 0
+              ? data.version.trim()
+              : "unknown",
+        };
+      } catch {
+        return { version: "unknown" };
+      }
     },
   });
 
@@ -431,6 +454,9 @@ export default function Profile() {
 
         {message ? <p className="text-sm text-emerald-300">{message}</p> : null}
         {error ? <p className="text-sm text-red-300">{error}</p> : null}
+        <p className="text-xs text-muted-foreground">
+          Version: {versionQuery.data?.version ?? "unknown"}
+        </p>
       </main>
       <BottomNav />
     </div>
