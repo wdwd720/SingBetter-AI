@@ -47,15 +47,36 @@ const assemblyClient = appConfig.transcription.enabled && process.env.ASSEMBLYAI
 
 const resolveAppVersion = (): string => {
   try {
-    const packageJsonPath = path.resolve(process.cwd(), "package.json");
-    const raw = fs.readFileSync(packageJsonPath, "utf8");
-    const parsed = JSON.parse(raw) as { version?: unknown };
-    return typeof parsed.version === "string" && parsed.version.trim().length > 0
-      ? parsed.version.trim()
-      : "unknown";
+    const { app } = require("electron");
+    if (app && typeof app.getVersion === "function") {
+      const electronVersion = app.getVersion();
+      if (typeof electronVersion === "string" && electronVersion.trim().length > 0) {
+        return electronVersion.trim();
+      }
+    }
   } catch {
-    return "unknown";
+    // Electron is unavailable in normal web/dev server mode.
   }
+
+  const candidatePaths = [
+    path.resolve(process.cwd(), "package.json"),
+    path.join(__dirname, "..", "package.json"),
+  ];
+
+  for (const packageJsonPath of candidatePaths) {
+    try {
+      if (!fs.existsSync(packageJsonPath)) continue;
+      const raw = fs.readFileSync(packageJsonPath, "utf8");
+      const parsed = JSON.parse(raw) as { version?: unknown };
+      if (typeof parsed.version === "string" && parsed.version.trim().length > 0) {
+        return parsed.version.trim();
+      }
+    } catch {
+      // Keep trying fallbacks.
+    }
+  }
+
+  return "unknown";
 };
 
 export async function registerRoutes(

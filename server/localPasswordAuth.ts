@@ -35,6 +35,25 @@ const getSessionCookiePolicy = () => {
   };
 };
 
+const getSessionCookieBaseOptions = () => {
+  const sessionPolicy = getSessionCookiePolicy();
+  return {
+    httpOnly: true,
+    sameSite: sessionPolicy.sameSite,
+    secure: sessionPolicy.secure,
+    path: "/" as const,
+  };
+};
+
+const isUniqueConstraintError = (error: unknown): boolean => {
+  const code = (error as any)?.code;
+  if (code === "23505" || code === "SQLITE_CONSTRAINT" || code === "SQLITE_CONSTRAINT_UNIQUE") {
+    return true;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return /unique constraint|duplicate key|UNIQUE constraint failed/i.test(message);
+};
+
 const loginSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(8).max(128),
@@ -302,6 +321,7 @@ export const createSessionOptions = (options: {
   secret: string;
   ttlMs: number;
 }): session.SessionOptions => {
+  const cookieBase = getSessionCookieBaseOptions();
   const sessionPolicy = getSessionCookiePolicy();
   return {
     secret: options.secret,
@@ -311,9 +331,7 @@ export const createSessionOptions = (options: {
     rolling: true,
     proxy: appConfig.releaseMode && !sessionPolicy.isDesktop,
     cookie: {
-      httpOnly: true,
-      sameSite: sessionPolicy.sameSite,
-      secure: sessionPolicy.secure,
+      ...cookieBase,
       maxAge: options.ttlMs,
     },
   };
@@ -399,7 +417,7 @@ export const registerLocalPasswordAuthRoutes = (app: Express): void => {
         .where(eq(localCredentials.email, normalizedEmail))
         .limit(1);
       if (existing) {
-        res.status(409).json({ message: "Email already in use" });
+        res.status(409).json({ message: "Email already registered" });
         return;
       }
 
@@ -436,6 +454,10 @@ export const registerLocalPasswordAuthRoutes = (app: Express): void => {
       });
       res.status(201).json(user);
     } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        res.status(409).json({ message: "Email already registered" });
+        return;
+      }
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: error.errors[0]?.message ?? "Invalid signup payload" });
         return;
@@ -703,6 +725,7 @@ export const registerLocalPasswordAuthRoutes = (app: Express): void => {
   app.post("/api/auth/logout", async (req, res) => {
     const userId = (req.user as any)?.claims?.sub as string | undefined;
     await logoutUser(req);
+    res.clearCookie("connect.sid", getSessionCookieBaseOptions());
     if (userId) {
       await addAuditLog({
         userId,
@@ -717,6 +740,7 @@ export const registerLocalPasswordAuthRoutes = (app: Express): void => {
 
   app.get("/api/logout", async (req, res) => {
     await logoutUser(req);
+    res.clearCookie("connect.sid", getSessionCookieBaseOptions());
     res.redirect("/");
   });
 };

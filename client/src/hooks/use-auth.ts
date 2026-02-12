@@ -22,7 +22,6 @@ async function logout(): Promise<void> {
     method: "POST",
     credentials: "include",
   }).catch(() => null);
-  window.location.href = "/login";
 }
 
 export function useAuth() {
@@ -36,8 +35,10 @@ export function useAuth() {
 
   const logoutMutation = useMutation({
     mutationFn: logout,
-    onSuccess: () => {
+    onSettled: async () => {
       queryClient.setQueryData(["/api/auth/user"], null);
+      await queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      window.location.href = "/login";
     },
   });
 

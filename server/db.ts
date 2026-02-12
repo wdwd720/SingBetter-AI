@@ -344,6 +344,7 @@ if (isSqlite && sqliteDbFilePath) {
     fs.writeFileSync(sqliteDbFilePath!, Buffer.from(data));
   };
 
+  process.on("exit", persist);
   process.on("beforeExit", persist);
   process.on("SIGINT", () => {
     persist();

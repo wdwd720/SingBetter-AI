@@ -38,7 +38,7 @@ type VersionResponse = {
 };
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoggingOut } = useAuth();
   const queryClient = useQueryClient();
 
   const [message, setMessage] = useState<string | null>(null);
@@ -285,8 +285,15 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-background pb-24">
-      <header className="px-6 py-9">
+      <header className="flex items-center justify-between px-6 py-9">
         <h1 className="text-3xl font-display font-bold tracking-tight">Profile</h1>
+        <button
+          onClick={() => logout()}
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/15 px-3.5 text-sm font-medium hover:bg-white/5"
+        >
+          <LogOut className="h-4 w-4" />
+          {isLoggingOut ? "Logging out..." : "Log out"}
+        </button>
       </header>
 
       <main className="space-y-7 px-6">
