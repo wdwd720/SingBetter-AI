@@ -1,6 +1,6 @@
 {
   "name": "rest-express",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SingBetter AI desktop app",
   "author": "SingBetter AI",
   "main": "desktop/main.cjs",
