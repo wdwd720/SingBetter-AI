@@ -32,7 +32,7 @@
     "release:smoke": "tsx script/release-smoke.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.883.0",
+    "@aws-sdk/client-s3": "^3.988.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@radix-ui/react-accordion": "^1.2.4",
