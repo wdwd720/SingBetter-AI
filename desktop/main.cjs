@@ -1,16 +1,25 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { pathToFileURL } = require("url");
+const net = require("net");
+const { spawn } = require("child_process");
 const { app, BrowserWindow, shell, dialog } = require("electron");
 const { autoUpdater } = require("electron-updater");
 
 const APP_HOST = "127.0.0.1";
 const APP_PORT = 5510;
-const SERVER_READY_TIMEOUT_MS = 20000;
+const SERVER_READY_TIMEOUT_MS = 60000;
+const SERVER_READY_RETRY_MS = 300;
 const UPDATE_CHECK_DELAY_MS = 5000;
-const STARTUP_LOG_RELATIVE_PATH = path.join("logs", "startup.log");
+const DESKTOP_STARTUP_LOG_FILENAME = "desktop-startup.log";
+const STARTUP_LOG_PREVIEW_LINES = 20;
 let updaterInitialized = false;
+let selectedPort = APP_PORT;
+let startupLogPath = path.resolve(process.cwd(), DESKTOP_STARTUP_LOG_FILENAME);
+let embeddedServerProcess = null;
+let isQuittingApp = false;
+let bootstrapCompleted = false;
+const startupDebugEnabled = process.env.SINGBETTER_DEBUG_STARTUP === "1";
 
 const logDesktop = (message) => {
   console.log(`[desktop] ${message}`);
@@ -20,22 +29,82 @@ const ensureDir = (targetPath) => {
   fs.mkdirSync(targetPath, { recursive: true });
 };
 
-const appendStartupLog = (userDataDir, message, error) => {
+const getStartupLogPath = () => {
+  if (startupLogPath) return startupLogPath;
   try {
-    const logsDir = path.join(userDataDir, "logs");
-    ensureDir(logsDir);
-    const startupLogPath = path.join(logsDir, "startup.log");
+    const userDataDir = app.getPath("userData");
+    ensureDir(userDataDir);
+    startupLogPath = path.join(userDataDir, DESKTOP_STARTUP_LOG_FILENAME);
+    return startupLogPath;
+  } catch (_error) {
+    // ignore and fallback
+  }
+  startupLogPath = path.resolve(process.cwd(), DESKTOP_STARTUP_LOG_FILENAME);
+  return startupLogPath;
+};
+
+const appendStartupLog = (message, error) => {
+  try {
+    const logPath = getStartupLogPath();
+    ensureDir(path.dirname(logPath));
     const errorSuffix = error
       ? ` | error=${error instanceof Error ? error.stack || error.message : String(error)}`
       : "";
     fs.appendFileSync(
-      startupLogPath,
+      logPath,
       `[${new Date().toISOString()}] ${message}${errorSuffix}\n`,
       "utf8",
     );
   } catch (_err) {
     // Never fail desktop startup because logging failed.
   }
+};
+
+const readStartupLogTail = (lineCount = STARTUP_LOG_PREVIEW_LINES) => {
+  try {
+    const logPath = getStartupLogPath();
+    if (!fs.existsSync(logPath)) return "(log file does not exist yet)";
+    const lines = fs
+      .readFileSync(logPath, "utf8")
+      .split(/\r?\n/)
+      .filter(Boolean);
+    if (lines.length === 0) return "(log file is empty)";
+    return lines.slice(-lineCount).join("\n");
+  } catch (error) {
+    return `Unable to read startup log tail: ${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
+const showStartupFailureDialog = (error, title = "Desktop failed to start embedded server") => {
+  const message = error instanceof Error ? error.stack || error.message : String(error);
+  appendStartupLog(title, error);
+  const details = [
+    title,
+    `Log file: ${getStartupLogPath()}`,
+    "",
+    "Recent log lines:",
+    readStartupLogTail(),
+  ].join("\n");
+  dialog.showErrorBox("Desktop Startup Error", `${message}\n\n${details}`);
+};
+
+const installGlobalCrashHandlers = () => {
+  process.on("uncaughtException", (error) => {
+    appendStartupLog("Main process uncaughtException", error);
+    showStartupFailureDialog(error);
+    if (!bootstrapCompleted) {
+      app.quit();
+    }
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    appendStartupLog("Main process unhandledRejection", error);
+    showStartupFailureDialog(error);
+    if (!bootstrapCompleted) {
+      app.quit();
+    }
+  });
 };
 
 const resolveFileDatabasePath = (databaseUrl) => {
@@ -90,22 +159,57 @@ const loadOrCreateSessionSecret = (secretPath) => {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const waitForServer = async (url) => {
+const isPortAvailable = (host, port) =>
+  new Promise((resolve) => {
+    const tester = net.createServer();
+    tester.once("error", () => resolve(false));
+    tester.once("listening", () => {
+      tester.close(() => resolve(true));
+    });
+    tester.listen({ host, port });
+  });
+
+const resolveDesktopPort = async (host, preferredPort) => {
+  if (await isPortAvailable(host, preferredPort)) return preferredPort;
+  for (let offset = 1; offset <= 25; offset += 1) {
+    const candidatePort = preferredPort + offset;
+    if (await isPortAvailable(host, candidatePort)) {
+      appendStartupLog(`Port ${preferredPort} is busy, using ${candidatePort} instead`);
+      return candidatePort;
+    }
+  }
+  throw new Error(
+    `No free port found near ${preferredPort}. Close any process using localhost ports ${preferredPort}-${preferredPort + 25}.`,
+  );
+};
+
+const waitForServer = async (url, serverProcess) => {
   const start = Date.now();
+  appendStartupLog(`Waiting for server readiness at ${url}/api/health`);
   while (Date.now() - start < SERVER_READY_TIMEOUT_MS) {
+    if (serverProcess && serverProcess.exitCode !== null) {
+      throw new Error(
+        `Embedded server exited before readiness (code=${serverProcess.exitCode}, signal=${serverProcess.signalCode || "none"})`,
+      );
+    }
     try {
       const response = await fetch(`${url}/api/health`, {
         method: "GET",
       });
       if (response.ok || response.status === 401 || response.status === 403) {
+        appendStartupLog(`Embedded server ready at ${url}/api/health (status ${response.status})`);
         return;
       }
-    } catch (_error) {
-      // Ignore startup race and retry.
+    } catch (error) {
+      if (startupDebugEnabled) {
+        appendStartupLog("Server health probe failed; retrying", error);
+      }
     }
-    await wait(300);
+    await wait(SERVER_READY_RETRY_MS);
   }
-  throw new Error("Timed out while waiting for desktop server startup");
+  throw new Error(
+    `Timed out while waiting for desktop server startup at ${url}/api/health after ${SERVER_READY_TIMEOUT_MS}ms`,
+  );
 };
 
 const readUpdatePublishTarget = () => {
@@ -228,10 +332,11 @@ const configureDesktopEnvironment = () => {
   const dbPath = path.join(dataDir, "singbetter.db");
   const legacyDesktopDbPath = path.join(dataDir, "desktop.db");
   const secretPath = path.join(dataDir, "session.secret");
-  const startupLogPath = path.join(dataDir, STARTUP_LOG_RELATIVE_PATH);
+  startupLogPath = path.join(dataDir, DESKTOP_STARTUP_LOG_FILENAME);
 
   ensureDir(dataDir);
   ensureDir(uploadsDir);
+  appendStartupLog(`Desktop startup initialized userData=${dataDir}`);
 
   const envDatabasePath = resolveFileDatabasePath(process.env.DATABASE_URL);
   const legacyProjectDbPath = path.resolve(process.cwd(), "dev.db");
@@ -249,20 +354,20 @@ const configureDesktopEnvironment = () => {
     dbSource = resolved.source;
     migratedFrom = resolved.migratedFrom;
   } catch (error) {
-    appendStartupLog(dataDir, "DB source resolution failed; continuing with fresh DB path", error);
+    appendStartupLog("DB source resolution failed; continuing with fresh DB path", error);
     try {
       if (!fs.existsSync(dbPath)) {
         fs.closeSync(fs.openSync(dbPath, "w"));
       }
     } catch (fileError) {
-      appendStartupLog(dataDir, "Failed to create fresh DB placeholder file", fileError);
+      appendStartupLog("Failed to create fresh DB placeholder file", fileError);
     }
   }
 
   process.env.NODE_ENV = "production";
   process.env.DESKTOP_APP = "1";
   process.env.HOST = APP_HOST;
-  process.env.PORT = String(APP_PORT);
+  process.env.PORT = String(selectedPort);
   process.env.DATABASE_URL = `file:${dbPath}`;
   process.env.USE_JSON_DB = "false";
   process.env.AUTH_PROVIDER = process.env.AUTH_PROVIDER || "local";
@@ -274,6 +379,7 @@ const configureDesktopEnvironment = () => {
   process.env.UPLOADS_DIR = uploadsDir;
   process.env.SESSION_SECRET = loadOrCreateSessionSecret(secretPath);
   process.env.STARTUP_LOG_PATH = startupLogPath;
+  process.env.CORS_ALLOWED_ORIGINS = `http://${APP_HOST}:${selectedPort}`;
 
   if (migratedFrom) {
     logDesktop(`DB resolved at: ${dbPath} (source: migrated)`);
@@ -282,8 +388,17 @@ const configureDesktopEnvironment = () => {
     logDesktop(`DB resolved at: ${dbPath} (source: ${dbSource})`);
   }
   logDesktop(
-    `Runtime paths desktopApp=${process.env.DESKTOP_APP} userData=${dataDir} db=${dbPath} uploads=${uploadsDir}`,
+    `Runtime paths desktopApp=${process.env.DESKTOP_APP} userData=${dataDir} db=${dbPath} uploads=${uploadsDir} port=${selectedPort}`,
   );
+  appendStartupLog(
+    `Runtime configured host=${APP_HOST} port=${selectedPort} db=${dbPath} uploads=${uploadsDir} debug=${startupDebugEnabled ? "1" : "0"}`,
+  );
+
+  if (startupDebugEnabled) {
+    appendStartupLog(
+      `Debug startup details cwd=${process.cwd()} resourcesPath=${process.resourcesPath} appPath=${app.getAppPath()}`,
+    );
+  }
 };
 
 const getServerEntryPath = () => path.resolve(__dirname, "..", "dist", "index.js");
@@ -295,10 +410,66 @@ const startEmbeddedServer = async () => {
       `Desktop bundle is missing server build at: ${serverEntry}. Run 'npm run build' first.`,
     );
   }
-  await import(pathToFileURL(serverEntry).href);
+
+  const serverEnv = {
+    ...process.env,
+    NODE_ENV: "production",
+    DESKTOP_APP: "1",
+    HOST: APP_HOST,
+    PORT: String(selectedPort),
+    ELECTRON_RUN_AS_NODE: "1",
+  };
+
+  appendStartupLog(
+    `Spawning embedded server command="${process.execPath}" args="${serverEntry}" host=${APP_HOST} port=${selectedPort}`,
+  );
+
+  const child = spawn(process.execPath, [serverEntry], {
+    cwd: path.resolve(__dirname, ".."),
+    env: serverEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  embeddedServerProcess = child;
+
+  child.stdout.on("data", (chunk) => {
+    const output = chunk.toString().trim();
+    if (!output) return;
+    appendStartupLog(`[server:stdout] ${output}`);
+    if (startupDebugEnabled) {
+      logDesktop(`[server:stdout] ${output}`);
+    }
+  });
+
+  child.stderr.on("data", (chunk) => {
+    const output = chunk.toString().trim();
+    if (!output) return;
+    appendStartupLog(`[server:stderr] ${output}`);
+    logDesktop(`[server:stderr] ${output}`);
+  });
+
+  child.on("error", (error) => {
+    appendStartupLog("Embedded server child process error", error);
+    if (!bootstrapCompleted) {
+      showStartupFailureDialog(error);
+      app.quit();
+    }
+  });
+
+  child.on("exit", (code, signal) => {
+    appendStartupLog(`Embedded server child exited code=${code ?? "null"} signal=${signal ?? "null"}`);
+    if (!bootstrapCompleted && !isQuittingApp) {
+      showStartupFailureDialog(
+        new Error(`Embedded server exited before startup completed (code=${code ?? "null"}, signal=${signal ?? "null"})`),
+      );
+      app.quit();
+    }
+  });
+
+  return child;
 };
 
-const createMainWindow = async () => {
+const createMainWindow = async (serverUrl) => {
   const windowIconPath = resolveDesktopIconPath();
   const mainWindow = new BrowserWindow({
     width: 1360,
@@ -314,14 +485,16 @@ const createMainWindow = async () => {
       sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
-      devTools: !app.isPackaged,
+      devTools: !app.isPackaged || startupDebugEnabled,
     },
   });
 
-  const appUrl = `http://${APP_HOST}:${APP_PORT}`;
-  const appOrigin = new URL(appUrl).origin;
-  await waitForServer(appUrl);
-  await mainWindow.loadURL(appUrl);
+  const appOrigin = new URL(serverUrl).origin;
+  await mainWindow.loadURL(serverUrl);
+
+  if (startupDebugEnabled) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
     const targetOrigin = (() => {
@@ -351,9 +524,14 @@ const createMainWindow = async () => {
 };
 
 const bootstrap = async () => {
+  selectedPort = await resolveDesktopPort(APP_HOST, APP_PORT);
   configureDesktopEnvironment();
-  await startEmbeddedServer();
-  const mainWindow = await createMainWindow();
+  const serverUrl = `http://${APP_HOST}:${selectedPort}`;
+  const child = await startEmbeddedServer();
+  await waitForServer(serverUrl, child);
+  const mainWindow = await createMainWindow(serverUrl);
+  bootstrapCompleted = true;
+  appendStartupLog(`Desktop startup completed successfully at ${serverUrl}`);
   initAutoUpdates(mainWindow);
 };
 
@@ -361,9 +539,18 @@ app.whenReady().then(async () => {
   try {
     await bootstrap();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    dialog.showErrorBox("Desktop Startup Error", message);
+    showStartupFailureDialog(error);
     app.quit();
+  }
+});
+
+installGlobalCrashHandlers();
+
+app.on("before-quit", () => {
+  isQuittingApp = true;
+  if (embeddedServerProcess && embeddedServerProcess.exitCode === null) {
+    appendStartupLog("Stopping embedded server process");
+    embeddedServerProcess.kill();
   }
 });
 
@@ -376,7 +563,9 @@ app.on("window-all-closed", () => {
 app.on("activate", async () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     try {
-      await createMainWindow();
+      const serverUrl = `http://${APP_HOST}:${selectedPort}`;
+      await waitForServer(serverUrl, embeddedServerProcess);
+      await createMainWindow(serverUrl);
     } catch (_error) {
       app.quit();
     }
