@@ -127,7 +127,7 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
-    "better-sqlite3": "^9.4.5",
+    "better-sqlite3": "^12.6.2",
     "drizzle-kit": "^0.31.8",
     "electron": "^37.3.1",
     "electron-builder": "^26.0.12",
