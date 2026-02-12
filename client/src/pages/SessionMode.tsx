@@ -2,12 +2,16 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { useCreateSession, useFinishSession } from "@/hooks/use-sessions";
 import { useAudioAnalysis } from "@/hooks/use-audio-analysis";
+import { recordCalibrationSample } from "@/lib/recorder";
+import { evaluateCalibration, type CalibrationMetrics } from "@/lib/audioMetrics";
+import { useToast } from "@/hooks/use-toast";
 import { PitchVisualizer } from "@/components/PitchVisualizer";
 import { X, Pause, Play, Square, Mic } from "lucide-react";
 import { clsx } from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function SessionMode() {
+  const { toast } = useToast();
   const params = useParams();
   const [_, setLocation] = useLocation();
   const mode = params.mode || "live_coach";
@@ -19,6 +23,10 @@ export default function SessionMode() {
   const [duration, setDuration] = useState(0);
   const [permissionError, setPermissionError] = useState(false);
   const [micState, setMicState] = useState<PermissionState | 'unknown'>('unknown');
+  const [calibrationStatus, setCalibrationStatus] = useState<"idle" | "running" | "passed" | "failed">("idle");
+  const [calibrationMetrics, setCalibrationMetrics] = useState<CalibrationMetrics | null>(null);
+  const [calibrationGuidance, setCalibrationGuidance] = useState<string[]>([]);
+  const [calibrationOverride, setCalibrationOverride] = useState(false);
 
   // Check initial permission status
   useEffect(() => {
@@ -57,6 +65,24 @@ export default function SessionMode() {
         console.log("Requesting microphone access...");
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log("Microphone access granted:", stream.id);
+
+        if (calibrationStatus !== "passed" && !calibrationOverride) {
+          setCalibrationStatus("running");
+          const sample = await recordCalibrationSample(stream, 3);
+          const evaluation = evaluateCalibration(sample.metrics);
+          setCalibrationMetrics(sample.metrics);
+          setCalibrationGuidance(evaluation.guidance);
+          setCalibrationStatus(evaluation.pass ? "passed" : "failed");
+          if (!evaluation.pass) {
+            stream.getTracks().forEach((track) => track.stop());
+            toast({
+              title: "Mic check failed",
+              description: evaluation.guidance.join(" "),
+              variant: "destructive",
+            });
+            return;
+          }
+        }
         
         // IMPORTANT: We MUST NOT stop the tracks here if we want useAudioAnalysis to use them.
         // Actually, getUserMedia creates a NEW stream. If we don't use this exact stream,
@@ -156,6 +182,35 @@ export default function SessionMode() {
 
         <div className="w-10" /> {/* Spacer */}
       </header>
+
+      {calibrationStatus === "failed" && !calibrationOverride && (
+        <div className="mx-6 mb-4 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 text-sm text-amber-100 z-10">
+          <div className="font-semibold mb-1">Mic check needed</div>
+          <div className="text-xs text-muted-foreground">
+            {calibrationGuidance.length > 0
+              ? calibrationGuidance.join(" ")
+              : "Adjust your mic level or move closer, then try again."}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => setCalibrationOverride(true)}
+              className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold"
+            >
+              Record anyway
+            </button>
+            <button
+              onClick={() => {
+                setCalibrationStatus("idle");
+                setCalibrationMetrics(null);
+                setCalibrationOverride(false);
+              }}
+              className="px-3 py-1 rounded-full border border-white/10 text-xs font-semibold"
+            >
+              Retry mic check
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Visualizer Area */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 z-10">

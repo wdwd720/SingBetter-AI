@@ -2,6 +2,7 @@ import { useSession } from "@/hooks/use-sessions";
 import { useParams, Link } from "wouter";
 import { ArrowLeft, Share2, CheckCircle2, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
+import { clsx } from "clsx";
 
 export default function Results() {
   const { id } = useParams();

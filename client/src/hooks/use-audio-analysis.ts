@@ -22,10 +22,14 @@ export function useAudioAnalysis(isListening: boolean) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const listeningRef = useRef(false);
 
   const startListening = useCallback(async () => {
     try {
+      if (audioContextRef.current) return;
+
       console.log("Hook: Requesting microphone access...");
       // Add more specific constraints
       const constraints = { 
@@ -42,6 +46,11 @@ export function useAudioAnalysis(isListening: boolean) {
       } catch (e) {
         console.warn("Retrying with simple constraints...");
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
+      if (!listeningRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
       }
       
       console.log("Hook: Microphone access granted");
@@ -68,6 +77,7 @@ export function useAudioAnalysis(isListening: boolean) {
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
       sourceRef.current = source;
+      streamRef.current = stream;
 
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
@@ -137,15 +147,33 @@ export function useAudioAnalysis(isListening: boolean) {
   }, []);
 
   const stopListening = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    if (sourceRef.current) sourceRef.current.disconnect();
-    if (analyserRef.current) analyserRef.current.disconnect();
-    if (audioContextRef.current) audioContextRef.current.close();
+    listeningRef.current = false;
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+    }
+    if (analyserRef.current) {
+      analyserRef.current.disconnect();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      void audioContextRef.current.close().catch(() => undefined);
+    }
+    audioContextRef.current = null;
+    analyserRef.current = null;
+    sourceRef.current = null;
+    streamRef.current = null;
     
     setAnalysis({ volume: 0, pitch: 0, note: "-", centsOff: 0, isStable: false });
   }, []);
 
   useEffect(() => {
+    listeningRef.current = isListening;
     if (isListening) {
       startListening();
     } else {
@@ -155,4 +183,103 @@ export function useAudioAnalysis(isListening: boolean) {
   }, [isListening, startListening, stopListening]);
 
   return analysis;
+}
+
+export function useAudioLevel(stream: MediaStream | null, enabled: boolean) {
+  const [level, setLevel] = useState(0);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const smoothRef = useRef(0);
+  const activeStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !stream) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      if (sourceRef.current) sourceRef.current.disconnect();
+      if (analyserRef.current) analyserRef.current.disconnect();
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        void audioContextRef.current.close().catch(() => undefined);
+      }
+      audioContextRef.current = null;
+      analyserRef.current = null;
+      sourceRef.current = null;
+      smoothRef.current = 0;
+      activeStreamRef.current = null;
+      setLevel(0);
+      return;
+    }
+
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) {
+      setLevel(0);
+      return;
+    }
+
+    const resetNodes = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      if (sourceRef.current) sourceRef.current.disconnect();
+      if (analyserRef.current) analyserRef.current.disconnect();
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        void audioContextRef.current.close().catch(() => undefined);
+      }
+      audioContextRef.current = null;
+      analyserRef.current = null;
+      sourceRef.current = null;
+      activeStreamRef.current = null;
+    };
+
+    if (activeStreamRef.current !== stream) {
+      resetNodes();
+    }
+
+    if (!audioContextRef.current) {
+      const audioContext = new AudioContextClass();
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 1024;
+      source.connect(analyser);
+      sourceRef.current = source;
+      analyserRef.current = analyser;
+      activeStreamRef.current = stream;
+    }
+
+    const dataArray = new Uint8Array(analyserRef.current?.fftSize ?? 1024);
+
+    const tick = () => {
+      if (!analyserRef.current) return;
+      analyserRef.current.getByteTimeDomainData(dataArray);
+      let sumSquares = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const value = (dataArray[i] - 128) / 128;
+        sumSquares += value * value;
+      }
+      const rms = Math.sqrt(sumSquares / dataArray.length);
+      smoothRef.current = smoothRef.current * 0.82 + rms * 0.18;
+      setLevel(Math.min(1, smoothRef.current));
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    const start = async () => {
+      if (audioContextRef.current?.state === "suspended") {
+        await audioContextRef.current.resume().catch(() => undefined);
+      }
+      if (!rafRef.current) {
+        tick();
+      }
+    };
+    void start();
+
+    return () => {
+      resetNodes();
+      smoothRef.current = 0;
+      setLevel(0);
+    };
+  }, [enabled, stream]);
+
+  return { level };
 }

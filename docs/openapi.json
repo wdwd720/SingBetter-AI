@@ -1,0 +1,110 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SingBetter API",
+    "version": "1.0.0",
+    "description": "API documentation for website, web app, and PWA flows."
+  },
+  "servers": [
+    { "url": "/api", "description": "Current version" },
+    { "url": "/api/v1", "description": "Versioned alias" }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Sign in with email/password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Signed in" },
+          "202": { "description": "MFA required" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "summary": "Create account",
+        "responses": {
+          "201": { "description": "Account created" }
+        }
+      }
+    },
+    "/auth/password/request-reset": {
+      "post": {
+        "summary": "Request reset token",
+        "responses": {
+          "204": { "description": "Accepted" }
+        }
+      }
+    },
+    "/auth/password/reset": {
+      "post": {
+        "summary": "Reset password with token",
+        "responses": {
+          "204": { "description": "Password updated" }
+        }
+      }
+    },
+    "/auth/mfa/setup": {
+      "post": {
+        "summary": "Create MFA secret and recovery codes",
+        "responses": {
+          "200": { "description": "MFA setup details" }
+        }
+      }
+    },
+    "/profile": {
+      "get": { "summary": "Get profile and settings" },
+      "put": { "summary": "Update profile and settings" }
+    },
+    "/privacy/export": {
+      "get": {
+        "summary": "Export user data"
+      }
+    },
+    "/privacy/delete-account": {
+      "delete": {
+        "summary": "Delete account and user data"
+      }
+    },
+    "/sessions": {
+      "get": { "summary": "List sessions (supports pagination/filtering/sort)" },
+      "post": { "summary": "Create session" }
+    },
+    "/live-coaching/history": {
+      "get": {
+        "summary": "List coaching attempts",
+        "description": "Supports limit, offset, uploadId, q, and sort."
+      }
+    },
+    "/feedback": {
+      "post": { "summary": "Submit feedback/bug report" }
+    },
+    "/notifications": {
+      "get": { "summary": "List current user notifications" }
+    },
+    "/analytics/events": {
+      "post": { "summary": "Track analytics event" }
+    },
+    "/health": {
+      "get": { "summary": "Health check" }
+    },
+    "/metrics": {
+      "get": { "summary": "Service metrics" }
+    }
+  }
+}

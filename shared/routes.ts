@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { insertSessionSchema, insertSessionMetricsSchema, insertSessionEventSchema, singingSessions, sessionMetrics, sessionEvents } from './schema';
+export type { CreateSessionRequest, FinishSessionRequest } from "./schema";
 
 export const errorSchemas = {
   validation: z.object({

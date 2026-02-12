@@ -32,7 +32,7 @@ export function getSession() {
       session_data: "sess",
       expire: "expire"
     }
-  });
+  } as any);
   return session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,

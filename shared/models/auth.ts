@@ -1,29 +1,18 @@
-import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
+import * as pgAuth from "./auth.pg";
+import * as sqliteAuth from "./auth.sqlite";
 
-// Session storage table.
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
-export const sessions = pgTable(
-  "sessions",
-  {
-    sid: varchar("sid").primaryKey(),
-    sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
-  },
-  (table) => [index("IDX_session_expire").on(table.expire)]
-);
+function detectSqlite(): boolean {
+  if (typeof process === "undefined" || !process.env) {
+    return false;
+  }
+  const url = process.env.DATABASE_URL ?? "";
+  return url.startsWith("file:") || url.startsWith("sqlite:");
+}
 
-// User storage table.
-// (IMPORTANT) This table is mandatory for Replit Auth, don't drop it.
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+const useSqlite = detectSqlite();
+
+export const sessions = useSqlite ? sqliteAuth.sessions : pgAuth.sessions;
+export const users = useSqlite ? sqliteAuth.users : pgAuth.users;
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;

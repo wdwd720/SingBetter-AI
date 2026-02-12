@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: asset_manager
+      POSTGRES_PASSWORD: asset_manager
+      POSTGRES_DB: asset_manager
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 5000
+      DATABASE_URL: postgres://asset_manager:asset_manager@db:5432/asset_manager
+      AUTH_PROVIDER: local
+      SESSION_SECRET: change-me
+      DISABLE_AUTH: "false"
+      USE_JSON_DB: "false"
+      UPLOADS_DRIVER: local
+      ASSEMBLYAI_API_KEY: ""
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+    command: sh -c "npm run db:push && npm start"
+
+volumes:
+  postgres_data:
