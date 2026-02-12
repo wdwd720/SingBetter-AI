@@ -419,13 +419,16 @@ const startEmbeddedServer = async () => {
     PORT: String(selectedPort),
     ELECTRON_RUN_AS_NODE: "1",
   };
+  const serverCwd = app.isPackaged
+    ? process.resourcesPath
+    : path.resolve(__dirname, "..");
 
   appendStartupLog(
-    `Spawning embedded server command="${process.execPath}" args="${serverEntry}" host=${APP_HOST} port=${selectedPort}`,
+    `Spawning embedded server command=${process.execPath} arg=${serverEntry} cwd=${serverCwd} host=${APP_HOST} port=${selectedPort}`,
   );
 
   const child = spawn(process.execPath, [serverEntry], {
-    cwd: path.resolve(__dirname, ".."),
+    cwd: serverCwd,
     env: serverEnv,
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
